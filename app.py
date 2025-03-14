@@ -3,6 +3,7 @@ import tkinter as tk
 from tkinter import messagebox
 import smtplib
 import SendEmail
+import RecieveEmail
 
 user_email = ''
 user_password = ''
@@ -81,6 +82,14 @@ def send_email():
     show_inbox()
 
 
+def fetch_emails():
+    emails = RecieveEmail.fetch_emails(IMAP_server)
+
+    email_listbox.delete(0, tk.END)  # Clear existing emails
+    for email_item in emails:
+        email_listbox.insert(tk.END, f"Subject: {email_item['subject']} | From: {email_item['from']}")
+
+
 def check_login_inputs_format():
     check = login_check_format()
     match check:
@@ -126,6 +135,7 @@ def show_inbox():
     login_frame.pack_forget()
     compose_frame.pack_forget()
     inbox_frame.pack()
+    fetch_emails()
 
 
 # Show Compose Email Page
@@ -153,8 +163,9 @@ login_frame.pack()
 # Inbox Frame
 inbox_frame = tk.Frame(root)
 tk.Label(inbox_frame, text="Inbox", font=("Arial", 14)).pack()
-email_list = tk.Listbox(inbox_frame, height=10)
-email_list.pack()
+email_listbox = tk.Listbox(inbox_frame, height=10, width=50)
+email_listbox.pack()
+tk.Button(inbox_frame, text="Refresh", command=fetch_emails).pack()
 tk.Button(inbox_frame, text="Compose", command=show_compose).pack()
 
 # Compose Email Frame
