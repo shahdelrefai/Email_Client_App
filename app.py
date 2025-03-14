@@ -1,3 +1,4 @@
+import imaplib
 import tkinter as tk
 from tkinter import messagebox
 import smtplib
@@ -5,39 +6,65 @@ import SendEmail
 
 user_email = ''
 user_password = ''
-Server = None
-
+SMTP_server = None
+IMAP_server = None
 
 def login():
-    global user_email, user_password, Server
+    global user_email, user_password, SMTP_server
     user_email = email_entry.get()
     user_password = password_entry.get()
 
     if check_login_inputs_format() is False:
         return
 
-    Server = gmail_login_authenticate()
-    if Server is None:
+    login_status = login_authenticate()
+    if login_status is False:
         clear_inputs([password_entry])
         return
 
     show_inbox()
 
 
-def gmail_login_authenticate():
-    try:
-        server = smtplib.SMTP_SSL("smtp.gmail.com", 465)  # Connect securely
-        server.login(user_email, user_password)  # Authenticate
+def login_authenticate():
+    global SMTP_server, IMAP_server
+    SMTP_server = smtp_login_authenticate()
+    IMAP_server = imap_login_authenticate()
+
+    if SMTP_server and IMAP_server:
         messagebox.showinfo('Success', '✅ Login successful.')
         print("✅ Login successful!")
-        return server  # Return the logged-in server object
+        return True
+
+    messagebox.showerror('Error', "❌ Authentication failed: Check your App Password.")
+    if SMTP_server is None and IMAP_server is None:
+        print("Error in both SMTP and IMAP logins.")
+    if SMTP_server is None:
+        print("Error in SMTP login.")
+    else:
+        print("Error in IMAP login.")
+    return False
+
+
+def smtp_login_authenticate():
+    try:
+        server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
+        server.login(user_email, user_password)
+        return server
     except smtplib.SMTPAuthenticationError:
-        messagebox.showerror('Error', "❌ Authentication failed: Check your App Password.")
-        print("❌ Authentication failed: Check your App Password.")
+        return None
     except Exception as e:
         print("❌ Error:", e)
+        return None
 
-    return None
+
+def imap_login_authenticate():
+    try:
+        server = imaplib.IMAP4_SSL("imap.gmail.com", 993)
+        server.login(user_email, user_password)
+        return server
+    except Exception as e:
+        print("❌ Error:", e)
+        return None
 
 
 def send_email():
@@ -45,9 +72,7 @@ def send_email():
     email_subject = email_subject_entry.get()
     email_body = email_body_entry.get("1.0", tk.END)
 
-
-
-    send_status = SendEmail.send_email(Server, user_email, email_to, email_subject, email_body)
+    send_status = SendEmail.send_email(SMTP_server, user_email, email_to, email_subject, email_body)
     if send_status is not True:
         messagebox.showerror('Error', f"❌ Failed to send email: {send_status}")
         return
