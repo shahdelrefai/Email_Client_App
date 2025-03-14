@@ -1,25 +1,24 @@
 import tkinter as tk
 from tkinter import messagebox
-import email.mime.multipart
-import requests
 import smtplib
+import SendEmail
 
 user_email = ''
 user_password = ''
+Server = None
 
 
 def login():
-    global user_email, user_password
+    global user_email, user_password, Server
     user_email = email_entry.get()
     user_password = password_entry.get()
 
-    if check_inputs_format() is False:
+    if check_login_inputs_format() is False:
         return
 
-    server = gmail_login_authenticate()
-    if server is None:
-        messagebox.showerror('Error', 'Unable to login')
-        clear_inputs([email_entry])
+    Server = gmail_login_authenticate()
+    if Server is None:
+        clear_inputs([password_entry])
         return
 
     show_inbox()
@@ -29,9 +28,11 @@ def gmail_login_authenticate():
     try:
         server = smtplib.SMTP_SSL("smtp.gmail.com", 465)  # Connect securely
         server.login(user_email, user_password)  # Authenticate
+        messagebox.showinfo('Success', '✅ Login successful.')
         print("✅ Login successful!")
         return server  # Return the logged-in server object
     except smtplib.SMTPAuthenticationError:
+        messagebox.showerror('Error', "❌ Authentication failed: Check your App Password.")
         print("❌ Authentication failed: Check your App Password.")
     except Exception as e:
         print("❌ Error:", e)
@@ -39,8 +40,24 @@ def gmail_login_authenticate():
     return None
 
 
-def check_inputs_format():
-    check = check_format()
+def send_email():
+    email_to = email_to_entry.get()
+    email_subject = email_subject_entry.get()
+    email_body = email_body_entry.get("1.0", tk.END)
+
+
+
+    send_status = SendEmail.send_email(Server, user_email, email_to, email_subject, email_body)
+    if send_status is not True:
+        messagebox.showerror('Error', f"❌ Failed to send email: {send_status}")
+        return
+
+    messagebox.showinfo('Success', "✅ Email sent successfully!")
+    show_inbox()
+
+
+def check_login_inputs_format():
+    check = login_check_format()
     match check:
         case 'both':
             messagebox.showerror('Error', 'Error in format of both email and password')
@@ -54,7 +71,7 @@ def check_inputs_format():
     return False
 
 
-def check_format():
+def login_check_format():
     global user_email, user_password
     user_email = user_email.strip()
     user_password = user_password.strip()
@@ -69,12 +86,9 @@ def check_format():
     if not user_email.endswith("@gmail.com"):
         email_error = True
 
-    if email_error and password_error :
+    if email_error and password_error:
         return 'both'
-    elif email_error:
-        return 'email'
-    else:
-        return 'password'
+    return 'email' if email_error else 'password' if password_error else 'True'
 
 
 def clear_inputs(inputs):
@@ -97,10 +111,10 @@ def show_compose():
 
 # GUI Setup
 root = tk.Tk()
-root.title("Mail.tm Email Client")
+root.title("Shahd\'s Email Client App")
 root.geometry("400x400")
 
-# Login & Sign-Up Frame
+# Login Frame
 login_frame = tk.Frame(root)
 tk.Label(login_frame, text="Email:").pack()
 email_entry = tk.Entry(login_frame)
@@ -121,14 +135,14 @@ tk.Button(inbox_frame, text="Compose", command=show_compose).pack()
 # Compose Email Frame
 compose_frame = tk.Frame(root)
 tk.Label(compose_frame, text="To:").pack()
-recipient_entry = tk.Entry(compose_frame)
-recipient_entry.pack()
+email_to_entry = tk.Entry(compose_frame)
+email_to_entry.pack()
 tk.Label(compose_frame, text="Subject:").pack()
-subject_entry = tk.Entry(compose_frame)
-subject_entry.pack()
+email_subject_entry = tk.Entry(compose_frame)
+email_subject_entry.pack()
 tk.Label(compose_frame, text="Body:").pack()
-body_entry = tk.Text(compose_frame, height=5)
-body_entry.pack()
-tk.Button(compose_frame, text="Send", command=show_compose).pack()
+email_body_entry = tk.Text(compose_frame, height=5)
+email_body_entry.pack()
+tk.Button(compose_frame, text="Send", command=send_email).pack()
 
 root.mainloop()
