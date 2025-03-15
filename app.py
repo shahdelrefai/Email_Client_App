@@ -1,133 +1,140 @@
 import imaplib
 import tkinter as tk
+import tkinter.font as tkFont
 from tkinter import messagebox
 import smtplib
 import SendEmail
 import RecieveEmail
+from RecieveEmail import EmailReceiver as EmailReceiver
+from SendEmail import EmailSender as EmailSender
 
 user_email = ''
 user_password = ''
-SMTP_server = None
-IMAP_server = None
+email_list = []
+
+eSender: EmailSender
+eReceiver: EmailReceiver
+
 
 def login():
-    global user_email, user_password, SMTP_server
+    global user_email, user_password, eSender, eReceiver
     user_email = email_entry.get()
     user_password = password_entry.get()
 
     if check_login_inputs_format() is False:
         return
 
+    eSender = EmailSender(user_email, user_password)
+    eReceiver = EmailReceiver(user_email, user_password)
+
     login_status = login_authenticate()
     if login_status is False:
-        clear_inputs([password_entry])
-        return
+        return False
 
     show_inbox()
 
-
 def login_authenticate():
-    global SMTP_server, IMAP_server
-    SMTP_server = smtp_login_authenticate()
-    IMAP_server = imap_login_authenticate()
+    stmp_connection = eSender.login()
+    imap_connection = eReceiver.login()
 
-    if SMTP_server and IMAP_server:
-        messagebox.showinfo('Success', '✅ Login successful.')
-        print("✅ Login successful!")
+    if stmp_connection and imap_connection:
+        show_success_messagebox("Login successful.")
         return True
 
-    messagebox.showerror('Error', "❌ Authentication failed: Check your App Password.")
-    if SMTP_server is None and IMAP_server is None:
+    show_error_messagebox("authenticate: Check your App Password.")
+    clear_inputs([password_entry])
+
+    if stmp_connection is None and imap_connection is False:
         print("Error in both SMTP and IMAP logins.")
-    if SMTP_server is None:
+    if stmp_connection is None:
         print("Error in SMTP login.")
     else:
         print("Error in IMAP login.")
     return False
-
-
-def smtp_login_authenticate():
-    try:
-        server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
-        server.login(user_email, user_password)
-        return server
-    except smtplib.SMTPAuthenticationError:
-        return None
-    except Exception as e:
-        print("❌ Error:", e)
-        return None
-
-
-def imap_login_authenticate():
-    try:
-        server = imaplib.IMAP4_SSL("imap.gmail.com", 993)
-        server.login(user_email, user_password)
-        return server
-    except Exception as e:
-        print("❌ Error:", e)
-        return None
-
 
 def send_email():
     email_to = email_to_entry.get()
     email_subject = email_subject_entry.get()
     email_body = email_body_entry.get("1.0", tk.END)
 
-    send_status = SendEmail.send_email(SMTP_server, user_email, email_to, email_subject, email_body)
+    send_status = eSender.send_email(email_to, email_subject, email_body)
+
     if send_status is not True:
-        messagebox.showerror('Error', f"❌ Failed to send email: {send_status}")
+        show_error_messagebox(f"send email: {send_status}")
         return
 
-    messagebox.showinfo('Success', "✅ Email sent successfully!")
+    show_success_messagebox("Email sent successfully!")
     show_inbox()
 
-
 def fetch_emails():
-    emails = RecieveEmail.fetch_emails(IMAP_server)
+    global email_list
+    email_list = eReceiver.fetch_emails()
+    email_list = list(reversed(email_list))
 
-    email_listbox.delete(0, tk.END)  # Clear existing emails
-    for email_item in emails:
-        email_listbox.insert(tk.END, f"Subject: {email_item['subject']} | From: {email_item['from']}")
+    email_display.config(state=tk.NORMAL)
+    email_display.delete("1.0", tk.END)
+    if email_list:
+        for email_item in email_list:
+            email_display.insert(tk.END, f"{email_item.get('subject')}\n", "subject")
+            email_display.insert(tk.END, f"From: {email_item.get('from')}\n\n", "from")
+    else:
+        email_display.insert(tk.END, "No emails to display.\n")
 
+    email_display.config(state=tk.DISABLED)
+
+def open_email(event):
+    """Open a window displaying the full email when clicked."""
+    index = email_display.index(tk.CURRENT).split('.')[0]
+    try:
+        email_index = int(index) // 3  # Each email is 3 lines apart
+        email_data = email_list[email_index]
+
+        email_window = tk.Toplevel(root)
+        email_window.title("Email Details")
+
+        subject_label = tk.Label(email_window, text=email_data["subject"], font=title_font, wraplength=400)
+        subject_label.pack(pady=(10, 5))
+
+        from_label = tk.Label(email_window, text=f"From: {email_data['from']}", font=from_font)
+        from_label.pack(pady=(0, 10))
+
+        body_text = tk.Text(email_window, wrap="word", height=60, width=80)
+        body_text.insert("1.0", email_data["body"])
+        body_text.config(state="disabled")
+        body_text.pack(padx=10, pady=5)
+        email_window.geometry("800x1000")
+    except:
+        pass
 
 def check_login_inputs_format():
     check = login_check_format()
-    match check:
-        case 'both':
-            messagebox.showerror('Error', 'Error in format of both email and password')
-        case 'email':
-            messagebox.showerror('Error', 'Error in format of email')
-        case 'password':
-            messagebox.showerror('Error', 'Error in format of password')
-        case _:
-            return True
-
-    return False
-
+    if not check:
+        show_error_messagebox(f"login: {check}")
+        return False
+    return True
 
 def login_check_format():
     global user_email, user_password
     user_email = user_email.strip()
     user_password = user_password.strip()
 
-    email_error = False
-    password_error = False
-
-    if not user_email:
-        email_error = True
-    if not user_password:
-        password_error = True
+    if not user_email or not user_password:
+        return 'Invalid email and password.'
     if not user_email.endswith("@gmail.com"):
-        email_error = True
-
-    if email_error and password_error:
-        return 'both'
-    return 'email' if email_error else 'password' if password_error else 'True'
-
+        return 'Invalid email.'
+    if not user_password:
+        return 'Invalid password.'
+    return True
 
 def clear_inputs(inputs):
     for input in inputs:
         input.delete(0, 'end')
+
+def show_error_messagebox(message):
+    messagebox.showerror('Error', f"❌ Failed to {message}")
+
+def show_success_messagebox(message):
+    messagebox.showinfo('Success', f"✅ {message}")
 
 
 # Show Inbox Page
@@ -147,38 +154,57 @@ def show_compose():
 # GUI Setup
 root = tk.Tk()
 root.title("Shahd\'s Email Client App")
-root.geometry("400x400")
+screen_width = root.winfo_screenwidth()
+screen_height = root.winfo_screenheight()
+root.geometry(f"{screen_width}x{screen_height}")
+#root.attributes('-fullscreen', True)
+
+# Define fonts
+title_font = ("Arial", 24, "bold")
+label_font = ("Arial", 18)
+entry_font = ("Arial", 20)
+button_font = ("Arial", 16)
+listbox_font = ("Arial", 16)
+text_font = ("Arial", 18)
+subject_font = ("Arial", 18, "bold")
+from_font = ("Arial", 16, "italic")
 
 # Login Frame
 login_frame = tk.Frame(root)
-tk.Label(login_frame, text="Email:").pack()
-email_entry = tk.Entry(login_frame)
+tk.Label(login_frame, text="Email:", font=label_font).pack()
+email_entry = tk.Entry(login_frame, font=entry_font, width=35)
 email_entry.pack()
-tk.Label(login_frame, text="Password:").pack()
-password_entry = tk.Entry(login_frame, show="*")
+tk.Label(login_frame, text="Password:", font=label_font).pack()
+password_entry = tk.Entry(login_frame, show="*", font=entry_font, width=35)
 password_entry.pack()
-tk.Button(login_frame, text="Login", command=login).pack()
-login_frame.pack()
+tk.Button(login_frame, text="Login", font=button_font, command=login, width=10).pack(pady=10)
+login_frame.pack(fill=tk.BOTH, expand=True, pady=400)
 
 # Inbox Frame
 inbox_frame = tk.Frame(root)
-tk.Label(inbox_frame, text="Inbox", font=("Arial", 14)).pack()
-email_listbox = tk.Listbox(inbox_frame, height=10, width=50)
-email_listbox.pack()
-tk.Button(inbox_frame, text="Refresh", command=fetch_emails).pack()
-tk.Button(inbox_frame, text="Compose", command=show_compose).pack()
+tk.Label(inbox_frame, text="Inbox", font=title_font).pack()
+email_display = tk.Text(inbox_frame, height=20, width=90, wrap="word", font=text_font)
+email_display.tag_config("subject", font=subject_font)
+email_display.tag_config("from", font=from_font)
+email_display.config(state=tk.DISABLED)
+email_display.pack(fill=tk.BOTH, expand=True, pady=200)
+email_display.bind("<Button-1>", open_email)
+tk.Button(inbox_frame, text="Refresh", font=button_font, command=fetch_emails).pack()
+tk.Button(inbox_frame, text="Compose", font=button_font, command=show_compose).pack()
 
 # Compose Email Frame
 compose_frame = tk.Frame(root)
-tk.Label(compose_frame, text="To:").pack()
-email_to_entry = tk.Entry(compose_frame)
+tk.Label(compose_frame, text="To:", font=label_font).pack(pady=(200,0))
+email_to_entry = tk.Entry(compose_frame, font=entry_font)
 email_to_entry.pack()
-tk.Label(compose_frame, text="Subject:").pack()
-email_subject_entry = tk.Entry(compose_frame)
+tk.Label(compose_frame, text="Subject:", font=label_font).pack()
+email_subject_entry = tk.Entry(compose_frame, font=entry_font)
 email_subject_entry.pack()
-tk.Label(compose_frame, text="Body:").pack()
-email_body_entry = tk.Text(compose_frame, height=5)
+tk.Label(compose_frame, text="Body:", font=label_font).pack()
+email_body_entry = tk.Text(compose_frame, height=10, font=entry_font)
 email_body_entry.pack()
-tk.Button(compose_frame, text="Send", command=send_email).pack()
+tk.Button(compose_frame, text="Send", font=button_font, command=send_email).pack(pady=10)
+tk.Button(compose_frame, text="Back", font=button_font, command=show_inbox).pack(pady=10)
+
 
 root.mainloop()
