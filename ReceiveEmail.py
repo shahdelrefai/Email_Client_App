@@ -2,6 +2,8 @@ import email
 from email.header import decode_header
 import imaplib
 import time
+import os
+from plyer import notification
 
 class EmailReceiver:
     def __init__(self, email_address, app_password):
@@ -56,19 +58,29 @@ class EmailReceiver:
             "subject": subject,
             "from": message.get('From'),
             "body": self._get_body(message),
-            "id": message["Message-ID"]
+            "id": message["Message-ID"],
+            "date": message['Date']
         }
         return email_info
 
     def _get_body(self, message):
         """Extract the body of the email"""
+        body = ""
         if message.is_multipart():
             for part in message.walk():
-                if part.get_content_type() == "text/plain" and "attachment" not in str(part.get('Content-Disposition')):
-                    return part.get_payload(decode=True).decode()
-        elif message.get_content_type() == "text/plain":
-            return message.get_payload(decode=True).decode()
-        return None
+                content_type = part.get_content_type()
+                content_disposition = str(part.get("Content-Disposition"))
+
+                # Ignore attachments
+                if "attachment" not in content_disposition:
+                    if content_type == "text/plain":  # Plain text
+                        body += part.get_payload(decode=True).decode(errors="ignore")
+                    elif content_type == "text/html":  # HTML content
+                        body += part.get_payload(decode=True).decode(errors="ignore")
+        else:
+            body = message.get_payload(decode=True).decode(errors="ignore")
+
+        return body
 
     def compare_and_add_email(self, latest_email_info):
         """Compare and add the latest email if it's not already in the list"""
@@ -81,15 +93,18 @@ class EmailReceiver:
         """Check if an email already exists in the list"""
         return any(existing_email['id'] == email_info['id'] for existing_email in self.email_list)
 
-    def fetch_new_email_periodically(self, interval=60):
-        """Fetch the latest email every interval and compare it"""
-        while True:
-            latest_email_info = self.fetch_latest_email()
-            if latest_email_info and self.compare_and_add_email(latest_email_info):
-                print(f"New email added: {latest_email_info['subject']} from {latest_email_info['from']}")
-            else:
-                print("No new emails detected.")
-            time.sleep(interval)
+    def fetch_new_email(self):
+        """Fetch the latest email"""
+        latest_email_info = self.fetch_latest_email()
+        if latest_email_info and self.compare_and_add_email(latest_email_info):
+            print(f"New email added: {latest_email_info['subject']} from {latest_email_info['from']}")
+            self._send_notification(latest_email_info['subject'], latest_email_info['from'])
+            return True
+
+    def _send_notification(self, subject, from_):
+        applescript = f'display notification "{from_}" with title "{subject}" sound name "Submarine"'
+        os.system(f"osascript -e '{applescript}'")
+
 
 
 

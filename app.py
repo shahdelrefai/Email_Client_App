@@ -1,12 +1,10 @@
-import imaplib
+from datetime import datetime
+import time
 import tkinter as tk
-import tkinter.font as tkFont
 from tkinter import messagebox
-import smtplib
-import SendEmail
-import RecieveEmail
-from RecieveEmail import EmailReceiver as EmailReceiver
+from ReceiveEmail import EmailReceiver as EmailReceiver
 from SendEmail import EmailSender as EmailSender
+
 
 user_email = ''
 user_password = ''
@@ -31,6 +29,7 @@ def login():
     if login_status is False:
         return False
 
+    start_new_email_checking()
     show_inbox()
 
 def login_authenticate():
@@ -75,12 +74,31 @@ def fetch_emails():
     email_display.delete("1.0", tk.END)
     if email_list:
         for email_item in email_list:
-            email_display.insert(tk.END, f"{email_item.get('subject')}\n", "subject")
+            date = email_item.get('date')
+            date = datetime.strptime(date, "%a, %d %b %Y %H:%M:%S %z")
+            formatted_date = date.strftime("%d %b %H:%M")
+            today = datetime.today()
+            if date.day == today.day and date.month == today.month:
+                formatted_date = date.strftime("%H:%M")  # Show only time
+            else:
+                formatted_date = date.strftime("%d %b %H:%M")
+
+            email_display.insert(tk.END, f"{email_item.get('subject')}\t\t\t\t{formatted_date}\n", "subject")
             email_display.insert(tk.END, f"From: {email_item.get('from')}\n\n", "from")
     else:
         email_display.insert(tk.END, "No emails to display.\n")
 
     email_display.config(state=tk.DISABLED)
+
+def start_new_email_checking():
+    """Check for new email periodically using after method."""
+    time.sleep(30)
+    received = eReceiver.fetch_new_email()
+    if received:
+        time.sleep(5)
+        fetch_emails()
+    root.after(10000, start_new_email_checking)  # Call the function again after 10 seconds
+
 
 def open_email(event):
     """Open a window displaying the full email when clicked."""
