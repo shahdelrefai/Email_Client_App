@@ -51,6 +51,26 @@ def login_authenticate():
         print("Error in IMAP login.")
     return False
 
+def check_login_inputs_format():
+    check = check_inputs_format()
+    if check is not True:
+        show_error_messagebox(f"login: {check}")
+        return False
+    return True
+
+def check_inputs_format():
+    global user_email, user_password
+    user_email = user_email.strip()
+    user_password = user_password.strip()
+
+    if not user_email or not user_password:
+        return 'Invalid email and password.'
+    if not user_email.endswith("@gmail.com"):
+        return 'Invalid email.'
+    if not user_password:
+        return 'Invalid password.'
+    return True
+
 def send_email():
     email_to = email_to_entry.get()
     email_subject = email_subject_entry.get()
@@ -75,15 +95,8 @@ def fetch_emails():
     if email_list:
         for email_item in email_list:
             date = email_item.get('date')
-            date = datetime.strptime(date, "%a, %d %b %Y %H:%M:%S %z")
-            formatted_date = date.strftime("%d %b %H:%M")
-            today = datetime.today()
-            if date.day == today.day and date.month == today.month:
-                formatted_date = date.strftime("%H:%M")  # Show only time
-            else:
-                formatted_date = date.strftime("%d %b %H:%M")
 
-            email_display.insert(tk.END, f"{email_item.get('subject')}\t\t\t\t{formatted_date}\n", "subject")
+            email_display.insert(tk.END, f"{email_item.get('subject')}\t\t\t\t\t\t\t\t\t\t{date}\n", "subject")
             email_display.insert(tk.END, f"From: {email_item.get('from')}\n\n", "from")
     else:
         email_display.insert(tk.END, "No emails to display.\n")
@@ -92,10 +105,9 @@ def fetch_emails():
 
 def start_new_email_checking():
     """Check for new email periodically using after method."""
-    time.sleep(30)
     received = eReceiver.fetch_new_email()
     if received:
-        time.sleep(5)
+        time.sleep(3)
         fetch_emails()
     root.after(10000, start_new_email_checking)  # Call the function again after 10 seconds
 
@@ -124,25 +136,6 @@ def open_email(event):
     except:
         pass
 
-def check_login_inputs_format():
-    check = login_check_format()
-    if not check:
-        show_error_messagebox(f"login: {check}")
-        return False
-    return True
-
-def login_check_format():
-    global user_email, user_password
-    user_email = user_email.strip()
-    user_password = user_password.strip()
-
-    if not user_email or not user_password:
-        return 'Invalid email and password.'
-    if not user_email.endswith("@gmail.com"):
-        return 'Invalid email.'
-    if not user_password:
-        return 'Invalid password.'
-    return True
 
 def clear_inputs(inputs):
     for input in inputs:

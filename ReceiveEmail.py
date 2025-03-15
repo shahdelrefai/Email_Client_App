@@ -1,9 +1,10 @@
 import email
 from email.header import decode_header
 import imaplib
-import time
 import os
-from plyer import notification
+from dateutil import parser
+from datetime import datetime
+from bs4 import BeautifulSoup
 
 class EmailReceiver:
     def __init__(self, email_address, app_password):
@@ -59,13 +60,31 @@ class EmailReceiver:
             "from": message.get('From'),
             "body": self._get_body(message),
             "id": message["Message-ID"],
-            "date": message['Date']
+            "date": self._convert_date(message['Date'])
         }
         return email_info
 
+    def _convert_date(self, date_string):
+        try:
+            # Convert the string into a datetime object
+            parsed_date = parser.parse(date_string)
+            today = datetime.today()
+
+            # Check if the parsed date is today
+            if parsed_date.day == today.day and parsed_date.month == today.month and parsed_date.year == today.year:
+                return parsed_date.strftime("%H:%M")  # Format as "HH:MM" for today
+            else:
+                return parsed_date.strftime("%d %b %H:%M")  # Format as "DD Mon HH:MM" for other days
+        except Exception as e:
+            print(f"Error parsing date '{date_string}': {e}")
+            return None
+
     def _get_body(self, message):
         """Extract the body of the email"""
+        """Extract the body of the email in a clean, readable format."""
         body = ""
+        html_body = ""
+
         if message.is_multipart():
             for part in message.walk():
                 content_type = part.get_content_type()
@@ -73,12 +92,28 @@ class EmailReceiver:
 
                 # Ignore attachments
                 if "attachment" not in content_disposition:
-                    if content_type == "text/plain":  # Plain text
-                        body += part.get_payload(decode=True).decode(errors="ignore")
-                    elif content_type == "text/html":  # HTML content
-                        body += part.get_payload(decode=True).decode(errors="ignore")
+                    payload = part.get_payload(decode=True)
+                    if payload:
+                        decoded_part = payload.decode(errors="ignore")
+
+                        if content_type == "text/plain":  # Plain text part
+                            body += decoded_part.strip() + "\n"
+                        elif content_type == "text/html":  # HTML part
+                            html_body += decoded_part.strip() + "\n"
+
         else:
-            body = message.get_payload(decode=True).decode(errors="ignore")
+            body = message.get_payload(decode=True).strip()
+
+        # If HTML exists, process and clean it
+        if html_body:
+            soup = BeautifulSoup(html_body, "html.parser")
+
+            # Remove scripts and styles
+            for script in soup(["script", "style"]):
+                script.decompose()
+
+            # Get cleaned text
+            body = soup.get_text(separator="\n", strip=True)
 
         return body
 
